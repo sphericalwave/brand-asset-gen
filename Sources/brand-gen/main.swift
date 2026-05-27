@@ -71,8 +71,10 @@ if let pdfURL = glyphPDF {
     let glyphColor = hexColor(glyphHex)
     let drawer     = pdfGlyphDrawer(url: pdfURL, tint: glyphColor)
 
-    write(render(size: 1024, background: brandColor, glyphDrawer: drawer),
-          to: appIconDir, name: "icon-1024.png")
+    for size in [16, 32, 64, 128, 256, 512, 1024] {
+        write(render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer),
+              to: appIconDir, name: "icon-\(size).png")
+    }
     write(renderLaunchLogo(circleSize: 170, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),
           to: launchDir, name: "LaunchLogo.png")
     write(renderLaunchLogo(circleSize: 340, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),

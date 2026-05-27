@@ -2,11 +2,21 @@ import Foundation
 
 // MARK: - Contents.json templates
 
-/// `AppIcon.appiconset/Contents.json` — iOS-only, single 1024 universal entry.
+/// `AppIcon.appiconset/Contents.json` — iOS universal 1024 + full macOS ladder.
 public let appIconContentsJSON = """
 {
   "images": [
-    { "filename": "icon-1024.png", "idiom": "universal", "platform": "ios", "size": "1024x1024" }
+    { "filename": "icon-1024.png", "idiom": "universal", "platform": "ios", "size": "1024x1024" },
+    { "filename": "icon-16.png",   "idiom": "mac", "scale": "1x", "size": "16x16" },
+    { "filename": "icon-32.png",   "idiom": "mac", "scale": "2x", "size": "16x16" },
+    { "filename": "icon-32.png",   "idiom": "mac", "scale": "1x", "size": "32x32" },
+    { "filename": "icon-64.png",   "idiom": "mac", "scale": "2x", "size": "32x32" },
+    { "filename": "icon-128.png",  "idiom": "mac", "scale": "1x", "size": "128x128" },
+    { "filename": "icon-256.png",  "idiom": "mac", "scale": "2x", "size": "128x128" },
+    { "filename": "icon-256.png",  "idiom": "mac", "scale": "1x", "size": "256x256" },
+    { "filename": "icon-512.png",  "idiom": "mac", "scale": "2x", "size": "256x256" },
+    { "filename": "icon-512.png",  "idiom": "mac", "scale": "1x", "size": "512x512" },
+    { "filename": "icon-1024.png", "idiom": "mac", "scale": "2x", "size": "512x512" }
   ],
   "info": { "author": "xcode", "version": 1 }
 }
