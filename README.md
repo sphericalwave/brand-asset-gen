@@ -1,83 +1,85 @@
 # brand-asset-gen
 
-Swift Package that generates iOS app icon + launch screen assets from a PDF glyph and brand color.
+Generates iOS app icon + launch screen assets from a brand color and a PDF glyph.
+One command. No design tools.
 
-Produces:
-- `AppIcon.appiconset/` — 1024×1024 PNG + Contents.json
-- `LaunchLogo.imageset/` — 1x/2x/3x transparent PNGs + Contents.json
-- `AccentColor.colorset/` — light + dark mode
-- `LaunchBackground.colorset/` — matches brand color (transparent launch logo composites over this)
-
-No design tools. Regenerate in one command.
+**Outputs:**
+| Asset | What it is |
+|-------|------------|
+| `AppIcon.appiconset/icon-1024.png` | App icon (opaque, brand-color bg) |
+| `LaunchLogo.imageset/LaunchLogo@{1,2,3}x.png` | Transparent splash logo (icon + app name) |
+| `AccentColor.colorset/Contents.json` | Tint color, light + dark mode |
+| `LaunchBackground.colorset/Contents.json` | Splash background (matches brand color) |
 
 ---
 
-## Usage
-
-### CLI tool
+## Quick start
 
 ```sh
-# Build once
-swift build -c release --package-path /path/to/brand-asset-gen
-cp .build/release/brand-gen /usr/local/bin/brand-gen   # optional: install to PATH
-
-# Run from your project root
-brand-gen \
+# Run directly from the package (no install needed)
+swift run --package-path ~/Documents/apps/brand-asset-gen brand-gen \
   --name MyApp \
   --brand-color 2A0A3D \
-  --dark-color 9B5CDB \
-  --glyph-pdf Assets/icon.pdf \
-  --glyph-color FFFFFF \
-  --output MyApp/Assets.xcassets
+  --dark-color  9B5CDB \
+  --glyph-pdf   Assets/icon.pdf \
+  --output      MyApp/Assets.xcassets
 ```
 
-Or run without installing:
+Or build once and install:
 
 ```sh
-swift run --package-path /path/to/brand-asset-gen brand-gen \
-  --name MyApp --brand-color 2A0A3D --glyph-pdf icon.pdf \
-  --output MyApp/Assets.xcassets
+cd ~/Documents/apps/brand-asset-gen
+swift build -c release
+cp .build/release/brand-gen /usr/local/bin/brand-gen
+
+# Then from any project root:
+brand-gen --name MyApp --brand-color 2A0A3D --glyph-pdf Assets/icon.pdf \
+          --output MyApp/Assets.xcassets
 ```
+
+### Flags
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--name` | ✓ | — | App name shown below the icon on the splash |
-| `--brand-color` | ✓ | — | Brand hex (no `#`). Used for AppIcon bg + LaunchBackground |
-| `--dark-color` | | brand-color | Lighter accent tint for dark mode |
-| `--glyph-pdf` | | — | PDF for icon glyph. Omit to generate JSON only |
+| `--name` | ✓ | — | App name text shown below the icon on the splash screen |
+| `--brand-color` | ✓ | — | Brand hex, no `#` (e.g. `2A0A3D`). Sets AppIcon bg + LaunchBackground |
+| `--dark-color` | | brand-color | Lighter tint for dark mode AccentColor |
+| `--glyph-pdf` | | — | Path to PDF for the icon glyph. Omit to write JSON files only |
 | `--glyph-color` | | `FFFFFF` | Tint applied to the PDF glyph |
-| `--output` | | `./Assets.xcassets` | Output Assets.xcassets directory |
-
-### Library (hand-drawn glyph)
-
-Add as a local package dependency and use `BrandGenCore` directly when you draw your glyph with CoreGraphics:
-
-```swift
-// generate_icons.swift
-import BrandGenCore
-
-let brandFill = NSColor(srgbRed: 0x2A/255, green: 0x0A/255, blue: 0x3D/255, alpha: 1)
-
-func myGlyph(clearCutouts: Bool) -> GlyphDrawer {
-    return { rect, ctx in
-        ctx.setFillColor(NSColor.white.cgColor)
-        // ... draw shape ...
-        if clearCutouts { ctx.setBlendMode(.clear) } else { ctx.setFillColor(brandFill.cgColor) }
-        // ... draw cutouts ...
-    }
-}
-
-write(render(size: 1024, background: brandFill, glyphDrawer: myGlyph(clearCutouts: false)),
-      to: appIconDir, name: "icon-1024.png")
-write(renderLaunchLogo(circleSize: 170, appName: "MyApp", glyphDrawer: myGlyph(clearCutouts: true)),
-      to: launchDir, name: "LaunchLogo.png")
-```
+| `--output` | | `./Assets.xcassets` | Path to your app's `Assets.xcassets` directory |
 
 ---
 
-## Info.plist
+## New project setup
 
-Wire the assets in `Info.plist` (no storyboard needed):
+### 1. Create the asset catalog folders
+
+Inside your app's `Assets.xcassets`, create these four folders (Xcode: *New Folder* → rename):
+
+```
+Assets.xcassets/
+  AppIcon.appiconset/
+  LaunchLogo.imageset/
+  AccentColor.colorset/
+  LaunchBackground.colorset/
+```
+
+The tool writes `Contents.json` into each folder and the PNGs into `AppIcon.appiconset/` and `LaunchLogo.imageset/`.
+
+### 2. Run the generator
+
+```sh
+brand-gen \
+  --name MyApp \
+  --brand-color 1A3C5E \
+  --dark-color  6BA3F5 \
+  --glyph-pdf   Assets/icon.pdf \
+  --output      MyApp/Assets.xcassets
+```
+
+### 3. Wire up the splash screen in `Info.plist`
+
+Add this dict (no `LaunchScreen.storyboard` needed):
 
 ```xml
 <key>UILaunchScreen</key>
@@ -91,17 +93,120 @@ Wire the assets in `Info.plist` (no storyboard needed):
 </dict>
 ```
 
-If your target has `INFOPLIST_KEY_UILaunchScreen_Generation = YES`, disable it for the iOS SDKs so the explicit dict wins:
+If your Xcode target has `INFOPLIST_KEY_UILaunchScreen_Generation = YES` (SwiftUI templates
+do this), turn it off for the iOS SDKs so the explicit dict above wins:
 
 ```
-"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = NO;
+"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]"     = NO;
 "INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = NO;
 ```
 
+### 4. Apply the accent color
+
+In your root SwiftUI view:
+
+```swift
+.tint(.accentColor)   // picks up AccentColor.colorset automatically
+```
+
+### 5. Clean build folder
+
+```
+Cmd+Shift+K
+```
+
+iOS aggressively caches the launch screen snapshot. A clean build is required after
+changing any splash assets or the `Info.plist` dict.
+
 ---
 
-## Design notes
+## Regenerating assets
 
-- **LaunchLogo is transparent** — the PNG has no background fill. `LaunchBackground` colorset fills the screen at runtime. This keeps the logo background-agnostic and prevents color seams.
-- **`brandFill` == `LaunchBackground`** — the CLI sets them to the same hex. App icon background and splash background always match.
-- **PDF tinting** — the PDF is rendered into a scratch bitmap, tinted via `sourceAtop` (preserves transparent holes), then composited. Transparent areas in the PDF (e.g. eye sockets) remain transparent on both the launch logo and over the app icon background.
+Re-run the same `brand-gen` command from your project root whenever you change the
+color or glyph. The tool overwrites all four asset folders in place.
+
+---
+
+## Using the library (hand-drawn glyph)
+
+If your glyph is drawn in CoreGraphics rather than a PDF, add `BrandGenCore` as a
+local package dependency and call the render functions directly from a standalone
+script in your project:
+
+**`Package.swift` dependency:**
+```swift
+.package(path: "~/Documents/apps/brand-asset-gen")
+// and in your target:
+.product(name: "BrandGenCore", package: "brand-asset-gen")
+```
+
+**`Tools/generate_icons.swift`:**
+```swift
+import BrandGenCore
+
+let appIconDir = projectRoot.appendingPathComponent("MyApp/Assets.xcassets/AppIcon.appiconset")
+let launchDir  = projectRoot.appendingPathComponent("MyApp/Assets.xcassets/LaunchLogo.imageset")
+
+let brandFill = NSColor(srgbRed: 0x1A/255, green: 0x3C/255, blue: 0x5E/255, alpha: 1)
+
+// clearCutouts: false → fill holes with brandFill (AppIcon, bg is already brandFill)
+// clearCutouts: true  → punch holes to alpha   (LaunchLogo, bg comes from LaunchBackground)
+func myGlyph(clearCutouts: Bool) -> GlyphDrawer {
+    return { rect, ctx in
+        let s = rect.width
+        ctx.setFillColor(NSColor.white.cgColor)
+        // ... draw your shape ...
+
+        if clearCutouts {
+            ctx.setBlendMode(.clear)
+            ctx.setFillColor(NSColor.white.cgColor)  // color ignored; .clear erases to alpha
+        } else {
+            ctx.setFillColor(brandFill.cgColor)
+        }
+        // ... draw cutouts ...
+    }
+}
+
+write(render(size: 1024, background: brandFill, glyphDrawer: myGlyph(clearCutouts: false)),
+      to: appIconDir, name: "icon-1024.png")
+write(renderLaunchLogo(circleSize: 170, appName: "MyApp", glyphDrawer: myGlyph(clearCutouts: true)),
+      to: launchDir, name: "LaunchLogo.png")
+write(renderLaunchLogo(circleSize: 340, appName: "MyApp", glyphDrawer: myGlyph(clearCutouts: true)),
+      to: launchDir, name: "LaunchLogo@2x.png")
+write(renderLaunchLogo(circleSize: 512, appName: "MyApp", glyphDrawer: myGlyph(clearCutouts: true)),
+      to: launchDir, name: "LaunchLogo@3x.png")
+```
+
+Run from project root: `swift Tools/generate_icons.swift`
+
+---
+
+## How the splash screen is composed
+
+```
+┌──────────────────────────────────┐
+│         LaunchBackground         │  ← colorset, same hex as brand color
+│                                  │
+│    ┌────────────────────────┐    │
+│    │  LaunchLogo (centered) │    │  ← transparent PNG; icon disc + app name text
+│    └────────────────────────┘    │
+│                                  │
+└──────────────────────────────────┘
+```
+
+The launch logo PNG has **no background fill**. The `LaunchBackground` colorset fills
+the entire screen, and the logo composites over it. This means:
+
+- No color seams if the exact hex drifts between assets
+- The same logo works on any background color
+- Holes in the glyph (e.g. eye sockets) show the background through
+
+---
+
+## PDF glyph notes
+
+- Provide a PDF with a **transparent background** and your glyph shape as the fill
+- Any color works — `--glyph-color` tints it (default white)
+- Transparent areas in the PDF (holes, cutouts) remain transparent after tinting and
+  reveal the brand color bg in the app icon, and the LaunchBackground in the splash
+- SVG won't work directly — export to PDF first (Figma, Sketch, Illustrator all support this)
