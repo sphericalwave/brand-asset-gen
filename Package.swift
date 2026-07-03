@@ -11,5 +11,6 @@ let package = Package(
     targets: [
         .target(name: "BrandGenCore", path: "Sources/BrandGenCore"),
         .executableTarget(name: "brand-gen", dependencies: ["BrandGenCore"], path: "Sources/brand-gen"),
+        .testTarget(name: "BrandGenCoreTests", dependencies: ["BrandGenCore"]),
     ]
 )
