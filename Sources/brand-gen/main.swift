@@ -15,22 +15,28 @@ guard let appName  = arg("--name"),
     print("""
 usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
 
-  --dark-color  <RRGGBB>   dark-mode accent tint (default: same as brand-color)
-  --glyph-pdf   <path>     PDF for the icon glyph; omit to skip PNG generation
-  --glyph-color <RRGGBB>   tint applied to PDF glyph (default: FFFFFF)
-  --output      <path>     output Assets.xcassets dir (default: ./Assets.xcassets)
+  --dark-color   <RRGGBB>  dark-mode accent tint (default: same as brand-color)
+  --brand-color2 <RRGGBB>  second color; app icon bg becomes a top→bottom gradient
+                           brand-color → brand-color2 (LaunchBackground stays flat brand-color)
+  --glyph-pdf    <path>    PDF for the icon glyph; omit to skip PNG generation
+  --sf-symbol    <name>    SF Symbol name for the icon glyph instead of --glyph-pdf
+  --glyph-color  <RRGGBB>  tint applied to the glyph (default: FFFFFF)
+  --output       <path>    output Assets.xcassets dir (default: ./Assets.xcassets)
 
 examples:
   brand-gen --name MyApp --brand-color 2A0A3D --dark-color 9B5CDB --glyph-pdf icon.pdf
   brand-gen --name MyApp --brand-color 1A3C5E --output ./MyApp/Assets.xcassets
+  brand-gen --name MyApp --brand-color 0B4FA3 --brand-color2 2E86F5 --sf-symbol figure.gymnastics
 """)
     exit(1)
 }
 
-let darkHex    = arg("--dark-color") ?? brandHex
-let glyphPDF   = arg("--glyph-pdf").map { URL(fileURLWithPath: $0, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)) }
-let glyphHex   = arg("--glyph-color") ?? "FFFFFF"
-let outputPath = arg("--output") ?? "./Assets.xcassets"
+let darkHex     = arg("--dark-color") ?? brandHex
+let brandHex2   = arg("--brand-color2")
+let glyphPDF    = arg("--glyph-pdf").map { URL(fileURLWithPath: $0, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)) }
+let sfSymbol    = arg("--sf-symbol")
+let glyphHex    = arg("--glyph-color") ?? "FFFFFF"
+let outputPath  = arg("--output") ?? "./Assets.xcassets"
 
 let outputURL  = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 let appIconDir = outputURL.appendingPathComponent("AppIcon.appiconset")
@@ -66,14 +72,28 @@ writeText(launchLogoContentsJSON, to: launchDir,  name: "Contents.json")
 
 // MARK: - PNGs
 
-if let pdfURL = glyphPDF {
+if glyphPDF != nil, sfSymbol != nil {
+    print("warning: both --glyph-pdf and --sf-symbol supplied; using --sf-symbol")
+}
+
+if glyphPDF != nil || sfSymbol != nil {
     let brandColor = hexColor(brandHex)
     let glyphColor = hexColor(glyphHex)
-    let drawer     = pdfGlyphDrawer(url: pdfURL, tint: glyphColor)
+    let drawer: GlyphDrawer
+    if let symbol = sfSymbol {
+        drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor)
+    } else {
+        drawer = pdfGlyphDrawer(url: glyphPDF!, tint: glyphColor)
+    }
 
     for size in [16, 32, 64, 128, 256, 512, 1024] {
-        write(render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer),
-              to: appIconDir, name: "icon-\(size).png")
+        let iconPNG: Data
+        if let hex2 = brandHex2 {
+            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), glyphDrawer: drawer)
+        } else {
+            iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer)
+        }
+        write(iconPNG, to: appIconDir, name: "icon-\(size).png")
     }
     write(renderLaunchLogo(circleSize: 170, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),
           to: launchDir, name: "LaunchLogo.png")
@@ -82,7 +102,7 @@ if let pdfURL = glyphPDF {
     write(renderLaunchLogo(circleSize: 512, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),
           to: launchDir, name: "LaunchLogo@3x.png")
 } else {
-    print("note: --glyph-pdf not supplied; skipping PNG generation. Add icon PNGs manually.")
+    print("note: neither --glyph-pdf nor --sf-symbol supplied; skipping PNG generation. Add icon PNGs manually.")
 }
 
 print("\ndone — \(outputURL.standardizedFileURL.path)")

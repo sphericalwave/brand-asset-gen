@@ -23,6 +23,31 @@ public func render(size: CGFloat, background: NSColor, glyphDrawer: GlyphDrawer)
     return png(rep)
 }
 
+/// Renders a square, fully-opaque AppIcon PNG with a diagonal (top-left → bottom-right)
+/// linear gradient background instead of a flat fill.
+public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSColor), glyphDrawer: GlyphDrawer) -> Data {
+    let rep = makeBitmapRep(width: Int(size), height: Int(size))
+    withContext(rep) { cg in
+        let full = CGRect(x: 0, y: 0, width: size, height: size)
+        cg.clear(full)
+        cg.saveGState()
+        cg.addRect(full)
+        cg.clip()
+        let colors = [backgroundGradient.top.cgColor, backgroundGradient.bottom.cgColor] as CFArray
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+            cg.drawLinearGradient(
+                gradient,
+                start: CGPoint(x: 0, y: size),
+                end: CGPoint(x: size, y: 0),
+                options: []
+            )
+        }
+        cg.restoreGState()
+        glyphDrawer(full, cg)
+    }
+    return png(rep)
+}
+
 /// Renders a non-square launch logo PNG on a **transparent** canvas.
 /// Layout: circular icon (top) + app name text (bottom).
 /// LaunchBackground colorset supplies the background color at runtime — do not bake it here.
@@ -79,39 +104,67 @@ public func pdfGlyphDrawer(url: URL, tint: NSColor? = nil, scale: CGFloat = 0.70
             print("warning: could not load glyph at \(url.path)")
             return
         }
-        let imgSize = image.size
-        let s       = min(rect.width / imgSize.width, rect.height / imgSize.height) * scale
-        let drawW   = imgSize.width  * s
-        let drawH   = imgSize.height * s
-        let drawRect = CGRect(
-            x: rect.midX - drawW / 2,
-            y: rect.midY - drawH / 2,
-            width: drawW,
-            height: drawH
-        )
+        drawImageGlyph(image, in: rect, tint: tint, scale: scale)
+    }
+}
 
-        if let tint = tint {
-            // Render the PDF into a scratch bitmap, tint it with sourceAtop (preserves
-            // transparent holes), then composite the tinted result onto the main canvas.
-            let w   = Int(ceil(drawW))
-            let h   = Int(ceil(drawH))
-            let tmp = makeBitmapRep(width: w, height: h)
-            withContext(tmp) { tmpCG in
-                tmpCG.clear(CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)))
-                image.draw(in: CGRect(x: 0, y: 0, width: drawW, height: drawH))
-                // sourceAtop: tint color × dest alpha — fills opaque glyph pixels, leaves
-                // transparent holes at alpha=0 so they stay transparent.
-                tmpCG.setBlendMode(.sourceAtop)
-                tmpCG.setFillColor(tint.cgColor)
-                tmpCG.fill(CGRect(x: 0, y: 0, width: drawW, height: drawH))
-            }
-            if let cgImg = tmp.cgImage {
-                let tinted = NSImage(cgImage: cgImg, size: NSSize(width: drawW, height: drawH))
-                tinted.draw(in: drawRect)
-            }
-        } else {
-            image.draw(in: drawRect)
+/// Returns a `GlyphDrawer` that renders an SF Symbol centered in the glyph rect.
+///
+/// - Parameters:
+///   - name: SF Symbol name, e.g. `"figure.gymnastics"`.
+///   - tint: Fill color for the symbol (default white). Symbols have no transparent
+///     holes, so this behaves the same as a flat tint on a solid PDF glyph.
+///   - weight: Symbol weight (default `.regular`).
+///   - scale: Fraction of the bounding rect to fill (default 0.60 — SF Symbols read
+///     larger than the trademark-style PDF glyphs, so a smaller default keeps padding sane).
+public func sfSymbolGlyphDrawer(name: String, tint: NSColor? = .white, weight: NSFont.Weight = .regular, scale: CGFloat = 0.60) -> GlyphDrawer {
+    return { rect, ctx in
+        let pointSize = max(rect.width, rect.height)
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) else {
+            print("warning: could not load SF Symbol '\(name)'")
+            return
         }
+        drawImageGlyph(image, in: rect, tint: tint, scale: scale)
+    }
+}
+
+/// Shared draw path for `pdfGlyphDrawer` and `sfSymbolGlyphDrawer`: scales `image` to fit
+/// `scale` of `rect`, optionally tinting it while preserving transparent holes.
+private func drawImageGlyph(_ image: NSImage, in rect: CGRect, tint: NSColor?, scale: CGFloat) {
+    let imgSize = image.size
+    let s       = min(rect.width / imgSize.width, rect.height / imgSize.height) * scale
+    let drawW   = imgSize.width  * s
+    let drawH   = imgSize.height * s
+    let drawRect = CGRect(
+        x: rect.midX - drawW / 2,
+        y: rect.midY - drawH / 2,
+        width: drawW,
+        height: drawH
+    )
+
+    if let tint = tint {
+        // Render the glyph into a scratch bitmap, tint it with sourceAtop (preserves
+        // transparent holes), then composite the tinted result onto the main canvas.
+        let w   = Int(ceil(drawW))
+        let h   = Int(ceil(drawH))
+        let tmp = makeBitmapRep(width: w, height: h)
+        withContext(tmp) { tmpCG in
+            tmpCG.clear(CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)))
+            image.draw(in: CGRect(x: 0, y: 0, width: drawW, height: drawH))
+            // sourceAtop: tint color × dest alpha — fills opaque glyph pixels, leaves
+            // transparent holes at alpha=0 so they stay transparent.
+            tmpCG.setBlendMode(.sourceAtop)
+            tmpCG.setFillColor(tint.cgColor)
+            tmpCG.fill(CGRect(x: 0, y: 0, width: drawW, height: drawH))
+        }
+        if let cgImg = tmp.cgImage {
+            let tinted = NSImage(cgImage: cgImg, size: NSSize(width: drawW, height: drawH))
+            tinted.draw(in: drawRect)
+        }
+    } else {
+        image.draw(in: drawRect)
     }
 }
 
