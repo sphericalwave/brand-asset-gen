@@ -6,7 +6,7 @@ One command. No design tools.
 **Outputs:**
 | Asset | What it is |
 |-------|------------|
-| `AppIcon.appiconset/icon-1024.png` | App icon (opaque, brand-color bg) |
+| `AppIcon.appiconset/icon-{16,32,64,128,256,512,1024}.png` | App icon at every required size (opaque, brand-color bg or gradient) |
 | `LaunchLogo.imageset/LaunchLogo@{1,2,3}x.png` | Transparent splash logo (icon + app name) |
 | `AccentColor.colorset/Contents.json` | Tint color, light + dark mode |
 | `LaunchBackground.colorset/Contents.json` | Splash background (matches brand color) |
@@ -44,8 +44,10 @@ brand-gen --name MyApp --brand-color 2A0A3D --glyph-pdf Assets/icon.pdf \
 | `--name` | ✓ | — | App name text shown below the icon on the splash screen |
 | `--brand-color` | ✓ | — | Brand hex, no `#` (e.g. `2A0A3D`). Sets AppIcon bg + LaunchBackground |
 | `--dark-color` | | brand-color | Lighter tint for dark mode AccentColor |
-| `--glyph-pdf` | | — | Path to PDF for the icon glyph. Omit to write JSON files only |
-| `--glyph-color` | | `FFFFFF` | Tint applied to the PDF glyph |
+| `--brand-color2` | | — | Second hex. When set, the AppIcon background becomes a top→bottom gradient brand-color → brand-color2 (LaunchBackground stays flat brand-color) |
+| `--glyph-pdf` | | — | Path to PDF for the icon glyph. Omit (with `--sf-symbol` also omitted) to write JSON files only |
+| `--sf-symbol` | | — | SF Symbol name to use as the icon glyph instead of `--glyph-pdf`. If both are supplied, `--sf-symbol` wins |
+| `--glyph-color` | | `FFFFFF` | Tint applied to the glyph |
 | `--output` | | `./Assets.xcassets` | Path to your app's `Assets.xcassets` directory |
 
 ---
