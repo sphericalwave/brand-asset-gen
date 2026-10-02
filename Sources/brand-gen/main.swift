@@ -26,6 +26,8 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   family style (sphericalwave blue suite):
   --background-pdf <path>  image aspect-filling the icon bg; also writes a LaunchGradient
                            imageset for a full-screen gradient launch screen
+  --launch-background-pdf <path>  full-screen launch image (e.g. 1320x2868), rendered at its own
+                           size; overrides the square LaunchGradient made from --background-pdf
   --overlay-pdf    <path>  shared layer between background and glyph (e.g. vector equilibrium)
   --overlay-opacity <0-1>  overlay opacity (default: 0.5)
   --overlay-scale  <0-1>   overlay size as a fraction of the icon (default: 0.86)
@@ -51,6 +53,7 @@ let glyphHex    = arg("--glyph-color") ?? "FFFFFF"
 let outputPath  = arg("--output") ?? "./Assets.xcassets"
 let cwdURL         = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let backgroundPDF  = arg("--background-pdf").map { URL(fileURLWithPath: $0, relativeTo: cwdURL) }
+let launchBackgroundPDF = arg("--launch-background-pdf").map { URL(fileURLWithPath: $0, relativeTo: cwdURL) }
 let overlayPDF     = arg("--overlay-pdf").map { URL(fileURLWithPath: $0, relativeTo: cwdURL) }
 let overlayOpacity = arg("--overlay-opacity").flatMap(Double.init).map { CGFloat($0) } ?? 0.5
 let overlayScale   = arg("--overlay-scale").flatMap(Double.init).map { CGFloat($0) } ?? 0.86
@@ -142,10 +145,15 @@ if glyphPDF != nil || sfSymbol != nil {
     write(renderLaunchLogo(circleSize: launchSize * 3, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo@3x.png")
 
-    if let background = backgroundPDF {
-        // Square gradient; the launch storyboard aspect-fills it, so a radial gradient stays round.
+    // Launch screen image: a dedicated launch background at its own size, else the icon
+    // background as a square. The launch storyboard aspect-fills it either way.
+    if let launchBackground = launchBackgroundPDF, let image = NSImage(contentsOf: launchBackground) {
         writeText(launchGradientContentsJSON, to: gradientDir, name: "Contents.json")
-        write(renderImage(size: 1500, drawer: imageFillDrawer(url: background)), to: gradientDir, name: "LaunchGradient.png")
+        write(renderImage(width: image.size.width, height: image.size.height, drawer: imageFillDrawer(url: launchBackground)),
+              to: gradientDir, name: "LaunchGradient.png")
+    } else if let background = backgroundPDF {
+        writeText(launchGradientContentsJSON, to: gradientDir, name: "Contents.json")
+        write(renderImage(width: 1500, height: 1500, drawer: imageFillDrawer(url: background)), to: gradientDir, name: "LaunchGradient.png")
     }
 } else {
     print("note: neither --glyph-pdf nor --sf-symbol supplied; skipping PNG generation. Add icon PNGs manually.")

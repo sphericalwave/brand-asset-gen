@@ -48,12 +48,12 @@ public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSC
     return png(rep)
 }
 
-/// Renders a square, fully-transparent-background PNG of `drawer` filling the canvas.
-/// Used for the full-screen LaunchBackground image (drawer = `imageFillDrawer`).
-public func renderImage(size: CGFloat, drawer: GlyphDrawer) -> Data {
-    let rep = makeBitmapRep(width: Int(size), height: Int(size))
+/// Renders a transparent-background PNG of `drawer` filling the canvas.
+/// Used for the full-screen LaunchGradient image (drawer = `imageFillDrawer`).
+public func renderImage(width: CGFloat, height: CGFloat, drawer: GlyphDrawer) -> Data {
+    let rep = makeBitmapRep(width: Int(width), height: Int(height))
     withContext(rep) { cg in
-        let full = CGRect(x: 0, y: 0, width: size, height: size)
+        let full = CGRect(x: 0, y: 0, width: width, height: height)
         cg.clear(full)
         drawer(full, cg)
     }
