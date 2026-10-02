@@ -20,7 +20,7 @@ public func render(size: CGFloat, background: NSColor, glyphDrawer: GlyphDrawer)
         cg.fill(full)
         glyphDrawer(full, cg)
     }
-    return png(rep)
+    return opaquePNG(rep)
 }
 
 /// Renders a square, fully-opaque AppIcon PNG with a diagonal (top-left → bottom-right)
@@ -45,7 +45,7 @@ public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSC
         cg.restoreGState()
         glyphDrawer(full, cg)
     }
-    return png(rep)
+    return opaquePNG(rep)
 }
 
 /// Renders a transparent-background PNG of `drawer` filling the canvas.
@@ -276,4 +276,18 @@ func withContext(_ rep: NSBitmapImageRep, body: (CGContext) -> Void) {
 
 func png(_ rep: NSBitmapImageRep) -> Data {
     rep.representation(using: .png, properties: [:])!
+}
+
+/// PNG with no alpha channel. App Store Connect rejects app icons that carry an alpha
+/// channel (ITMS-90717) even when every pixel is opaque, so icons are re-drawn into an
+/// RGB-only (noneSkipLast) bitmap before encoding.
+func opaquePNG(_ rep: NSBitmapImageRep) -> Data {
+    let w = rep.pixelsWide, h = rep.pixelsHigh
+    let ctx = CGContext(
+        data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpace(name: CGColorSpace.sRGB)!,
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    )!
+    ctx.draw(rep.cgImage!, in: CGRect(x: 0, y: 0, width: w, height: h))
+    return NSBitmapImageRep(cgImage: ctx.makeImage()!).representation(using: .png, properties: [:])!
 }

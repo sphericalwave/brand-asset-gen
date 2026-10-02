@@ -33,6 +33,7 @@ final class BrandGenCoreTests: XCTestCase {
         let rep = try XCTUnwrap(NSBitmapImageRep(data: data))
         XCTAssertEqual(rep.pixelsWide, 64)
         XCTAssertEqual(rep.pixelsHigh, 64)
+        XCTAssertFalse(rep.hasAlpha, "App Store rejects app icons with an alpha channel")
     }
 
     func testLaunchLogoWithoutNameIsSquare() throws {
