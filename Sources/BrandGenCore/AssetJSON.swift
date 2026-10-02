@@ -34,6 +34,17 @@ public let launchLogoContentsJSON = """
 }
 """
 
+/// `LaunchGradient.imageset/Contents.json` — one large universal image, aspect-filled by the
+/// launch storyboard (a smooth gradient doesn't need per-scale variants).
+public let launchGradientContentsJSON = """
+{
+  "images": [
+    { "filename": "LaunchGradient.png", "idiom": "universal" }
+  ],
+  "info": { "author": "xcode", "version": 1 }
+}
+"""
+
 // MARK: - Colorset JSON
 
 /// Generates `Contents.json` for a colorset.

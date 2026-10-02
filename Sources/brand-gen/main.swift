@@ -23,6 +23,17 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --glyph-color  <RRGGBB>  tint applied to the glyph (default: FFFFFF)
   --output       <path>    output Assets.xcassets dir (default: ./Assets.xcassets)
 
+  family style (sphericalwave blue suite):
+  --background-pdf <path>  image aspect-filling the icon bg; also writes a LaunchGradient
+                           imageset for a full-screen gradient launch screen
+  --overlay-pdf    <path>  shared layer between background and glyph (e.g. vector equilibrium)
+  --overlay-opacity <0-1>  overlay opacity (default: 0.5)
+  --overlay-scale  <0-1>   overlay size as a fraction of the icon (default: 0.86)
+  --glyph-scale    <0-1>   glyph size as a fraction of the icon (default: 0.70 PDF, 0.60 SF Symbol)
+  --shadow                 one soft drop shadow under overlay + glyph
+  --launch-style   glyph|tile  launch logo is overlay + glyph only (default) or the full icon tile
+  --no-launch-name         omit the app name under the launch logo
+
 examples:
   brand-gen --name MyApp --brand-color 2A0A3D --dark-color 9B5CDB --glyph-pdf icon.pdf
   brand-gen --name MyApp --brand-color 1A3C5E --output ./MyApp/Assets.xcassets
@@ -37,12 +48,22 @@ let glyphPDF    = arg("--glyph-pdf").map { URL(fileURLWithPath: $0, relativeTo: 
 let sfSymbol    = arg("--sf-symbol")
 let glyphHex    = arg("--glyph-color") ?? "FFFFFF"
 let outputPath  = arg("--output") ?? "./Assets.xcassets"
+let cwdURL         = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+let backgroundPDF  = arg("--background-pdf").map { URL(fileURLWithPath: $0, relativeTo: cwdURL) }
+let overlayPDF     = arg("--overlay-pdf").map { URL(fileURLWithPath: $0, relativeTo: cwdURL) }
+let overlayOpacity = arg("--overlay-opacity").flatMap(Double.init).map { CGFloat($0) } ?? 0.5
+let overlayScale   = arg("--overlay-scale").flatMap(Double.init).map { CGFloat($0) } ?? 0.86
+let glyphScale     = arg("--glyph-scale").flatMap(Double.init).map { CGFloat($0) }
+let shadow         = CommandLine.arguments.contains("--shadow")
+let launchTile     = arg("--launch-style") == "tile"
+let launchName     = CommandLine.arguments.contains("--no-launch-name") ? "" : appName
 
 let outputURL  = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 let appIconDir = outputURL.appendingPathComponent("AppIcon.appiconset")
 let launchDir  = outputURL.appendingPathComponent("LaunchLogo.imageset")
 let accentDir  = outputURL.appendingPathComponent("AccentColor.colorset")
 let bgDir      = outputURL.appendingPathComponent("LaunchBackground.colorset")
+let gradientDir = outputURL.appendingPathComponent("LaunchGradient.imageset")
 
 // MARK: - Helpers
 
@@ -81,26 +102,49 @@ if glyphPDF != nil || sfSymbol != nil {
     let glyphColor = hexColor(glyphHex)
     let drawer: GlyphDrawer
     if let symbol = sfSymbol {
-        drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor)
+        drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor, scale: glyphScale ?? 0.60)
     } else {
-        drawer = pdfGlyphDrawer(url: glyphPDF!, tint: glyphColor)
+        drawer = pdfGlyphDrawer(url: glyphPDF!, tint: glyphColor, scale: glyphScale ?? 0.70)
     }
+
+    // Foreground = optional overlay under the glyph, optionally casting one shared shadow.
+    var foreground = drawer
+    if let overlay = overlayPDF {
+        let overlayDrawer = faded(pdfGlyphDrawer(url: overlay, tint: glyphColor, scale: overlayScale), opacity: overlayOpacity)
+        foreground = layered([overlayDrawer, drawer])
+    }
+    if shadow { foreground = shadowed(foreground) }
+
+    let backgroundDrawer = backgroundPDF.map { imageFillDrawer(url: $0) }
+    let iconDrawer = layered([backgroundDrawer, foreground].compactMap { $0 })
+    // Tile launch logo: the whole icon as a rounded square, inset so its shadow isn't cropped.
+    let launchDrawer: GlyphDrawer = launchTile
+        ? { rect, ctx in shadowed(tiled(iconDrawer))(rect.insetBy(dx: rect.width * 0.06, dy: rect.width * 0.06), ctx) }
+        : foreground
 
     for size in [16, 32, 64, 128, 256, 512, 1024] {
         let iconPNG: Data
-        if let hex2 = brandHex2 {
+        if backgroundDrawer != nil {
+            iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: iconDrawer)
+        } else if let hex2 = brandHex2 {
             iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), glyphDrawer: drawer)
         } else {
             iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer)
         }
         write(iconPNG, to: appIconDir, name: "icon-\(size).png")
     }
-    write(renderLaunchLogo(circleSize: 170, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),
+    write(renderLaunchLogo(circleSize: 170, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo.png")
-    write(renderLaunchLogo(circleSize: 340, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),
+    write(renderLaunchLogo(circleSize: 340, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo@2x.png")
-    write(renderLaunchLogo(circleSize: 512, appName: appName, glyphColor: glyphColor, glyphDrawer: drawer),
+    write(renderLaunchLogo(circleSize: 512, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo@3x.png")
+
+    if let background = backgroundPDF {
+        // Square gradient; the launch storyboard aspect-fills it, so a radial gradient stays round.
+        writeText(launchGradientContentsJSON, to: gradientDir, name: "Contents.json")
+        write(renderImage(size: 1500, drawer: imageFillDrawer(url: background)), to: gradientDir, name: "LaunchGradient.png")
+    }
 } else {
     print("note: neither --glyph-pdf nor --sf-symbol supplied; skipping PNG generation. Add icon PNGs manually.")
 }

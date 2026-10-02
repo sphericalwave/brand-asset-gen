@@ -48,8 +48,20 @@ public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSC
     return png(rep)
 }
 
+/// Renders a square, fully-transparent-background PNG of `drawer` filling the canvas.
+/// Used for the full-screen LaunchBackground image (drawer = `imageFillDrawer`).
+public func renderImage(size: CGFloat, drawer: GlyphDrawer) -> Data {
+    let rep = makeBitmapRep(width: Int(size), height: Int(size))
+    withContext(rep) { cg in
+        let full = CGRect(x: 0, y: 0, width: size, height: size)
+        cg.clear(full)
+        drawer(full, cg)
+    }
+    return png(rep)
+}
+
 /// Renders a non-square launch logo PNG on a **transparent** canvas.
-/// Layout: circular icon (top) + app name text (bottom).
+/// Layout: circular icon (top) + app name text (bottom). Pass an empty `appName` for icon only.
 /// LaunchBackground colorset supplies the background color at runtime — do not bake it here.
 /// `glyphDrawer` should use `.clear` blend mode for any cutouts so the bg color shows through holes.
 public func renderLaunchLogo(
@@ -59,13 +71,13 @@ public func renderLaunchLogo(
     glyphDrawer: GlyphDrawer
 ) -> Data {
     let fontSize: CGFloat = circleSize * 0.22
-    let gap: CGFloat      = circleSize * 0.09   // between circle bottom and text top
-    let textPad: CGFloat  = circleSize * 0.06   // padding below text baseline
+    let gap: CGFloat      = appName.isEmpty ? 0 : circleSize * 0.09   // between circle bottom and text top
+    let textPad: CGFloat  = appName.isEmpty ? 0 : circleSize * 0.06   // padding below text baseline
 
     let font  = NSFont.boldSystemFont(ofSize: fontSize)
     let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: glyphColor]
     let attrStr  = NSAttributedString(string: appName, attributes: attrs)
-    let textSize = attrStr.size()
+    let textSize = appName.isEmpty ? .zero : attrStr.size()
 
     let canvasW = max(circleSize, ceil(textSize.width) + circleSize * 0.10)
     let canvasH = circleSize + gap + ceil(textSize.height) + textPad
@@ -127,6 +139,71 @@ public func sfSymbolGlyphDrawer(name: String, tint: NSColor? = .white, weight: N
             return
         }
         drawImageGlyph(image, in: rect, tint: tint, scale: scale)
+    }
+}
+
+// MARK: - Family-style composition
+
+/// Returns a `GlyphDrawer` that draws an image (e.g. a gradient PDF) aspect-filling the rect,
+/// centered and cropped. Used for the icon background and the launch background.
+public func imageFillDrawer(url: URL) -> GlyphDrawer {
+    return { rect, ctx in
+        guard let image = NSImage(contentsOf: url) else {
+            print("warning: could not load background at \(url.path)")
+            return
+        }
+        let s = max(rect.width / image.size.width, rect.height / image.size.height)
+        let w = image.size.width * s, h = image.size.height * s
+        ctx.saveGState()
+        ctx.clip(to: rect)
+        image.draw(in: CGRect(x: rect.midX - w / 2, y: rect.midY - h / 2, width: w, height: h))
+        ctx.restoreGState()
+    }
+}
+
+/// Draws each drawer in order into the same rect.
+public func layered(_ drawers: [GlyphDrawer]) -> GlyphDrawer {
+    return { rect, ctx in drawers.forEach { $0(rect, ctx) } }
+}
+
+/// Draws `drawer` at reduced opacity (applied to the whole layer, so overlaps don't stack).
+public func faded(_ drawer: @escaping GlyphDrawer, opacity: CGFloat) -> GlyphDrawer {
+    return { rect, ctx in
+        ctx.saveGState()
+        ctx.setAlpha(opacity)
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        drawer(rect, ctx)
+        ctx.endTransparencyLayer()
+        ctx.restoreGState()
+    }
+}
+
+/// Draws `drawer` with one soft drop shadow cast by everything it draws.
+/// Sizes are fractions of the rect width so the shadow looks the same at every icon size.
+public func shadowed(_ drawer: @escaping GlyphDrawer, blur: CGFloat = 0.025, offset: CGFloat = 0.01, opacity: CGFloat = 0.35) -> GlyphDrawer {
+    return { rect, ctx in
+        ctx.saveGState()
+        ctx.setShadow(
+            offset: CGSize(width: 0, height: -rect.width * offset),
+            blur: rect.width * blur,
+            color: NSColor.black.withAlphaComponent(opacity).cgColor
+        )
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        drawer(rect, ctx)
+        ctx.endTransparencyLayer()
+        ctx.restoreGState()
+    }
+}
+
+/// Draws `drawer` clipped to an iOS-style rounded-square tile filling the rect.
+public func tiled(_ drawer: @escaping GlyphDrawer, cornerFraction: CGFloat = 0.2237) -> GlyphDrawer {
+    return { rect, ctx in
+        let r = rect.width * cornerFraction
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: rect, cornerWidth: r, cornerHeight: r, transform: nil))
+        ctx.clip()
+        drawer(rect, ctx)
+        ctx.restoreGState()
     }
 }
 

@@ -34,4 +34,12 @@ final class BrandGenCoreTests: XCTestCase {
         XCTAssertEqual(rep.pixelsWide, 64)
         XCTAssertEqual(rep.pixelsHigh, 64)
     }
+
+    func testLaunchLogoWithoutNameIsSquare() throws {
+        let drawer = shadowed(tiled(layered([{ r, c in c.setFillColor(.white); c.fill(r) }])))
+        let data = renderLaunchLogo(circleSize: 100, appName: "", glyphDrawer: drawer)
+        let rep = try XCTUnwrap(NSBitmapImageRep(data: data))
+        XCTAssertEqual(rep.pixelsWide, 100)
+        XCTAssertEqual(rep.pixelsHigh, 100)
+    }
 }
