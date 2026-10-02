@@ -33,6 +33,7 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --shadow                 one soft drop shadow under overlay + glyph
   --launch-style   glyph|tile  launch logo is overlay + glyph only (default) or the full icon tile
   --no-launch-name         omit the app name under the launch logo
+  --launch-size    <pt>    launch logo icon size in points (default: 170)
 
 examples:
   brand-gen --name MyApp --brand-color 2A0A3D --dark-color 9B5CDB --glyph-pdf icon.pdf
@@ -57,6 +58,7 @@ let glyphScale     = arg("--glyph-scale").flatMap(Double.init).map { CGFloat($0)
 let shadow         = CommandLine.arguments.contains("--shadow")
 let launchTile     = arg("--launch-style") == "tile"
 let launchName     = CommandLine.arguments.contains("--no-launch-name") ? "" : appName
+let launchSize     = arg("--launch-size").flatMap(Double.init).map { CGFloat($0) } ?? 170
 
 let outputURL  = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 let appIconDir = outputURL.appendingPathComponent("AppIcon.appiconset")
@@ -133,11 +135,11 @@ if glyphPDF != nil || sfSymbol != nil {
         }
         write(iconPNG, to: appIconDir, name: "icon-\(size).png")
     }
-    write(renderLaunchLogo(circleSize: 170, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
+    write(renderLaunchLogo(circleSize: launchSize, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo.png")
-    write(renderLaunchLogo(circleSize: 340, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
+    write(renderLaunchLogo(circleSize: launchSize * 2, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo@2x.png")
-    write(renderLaunchLogo(circleSize: 512, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
+    write(renderLaunchLogo(circleSize: launchSize * 3, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo@3x.png")
 
     if let background = backgroundPDF {
