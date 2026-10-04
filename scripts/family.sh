@@ -40,6 +40,12 @@ typeset -A APPS=(
   wealth       "wealth/wealth/Assets.xcassets|sf:dollarsign|wealth/wealth.xcodeproj"
 )
 
+# Glyphs drawn on a full icon-sized page (positioned against the overlay themselves) render
+# at 1.0 instead of the cropped-glyph default.
+typeset -A GLYPH_SCALE=(
+  shodan 1.0
+)
+
 swift build -c release --package-path $REPO >/dev/null
 GEN=$REPO/.build/release/brand-gen
 
@@ -54,7 +60,7 @@ for app in ${@:-${(ko)APPS}}; do
     glyphArgs=(--sf-symbol ${glyph#sf:})
   else
     # Custom glyphs are cropped tight, so they need a smaller scale to match SF Symbols.
-    glyphArgs=(--glyph-pdf $BRAND/glyphs/$glyph --glyph-scale 0.56)
+    glyphArgs=(--glyph-pdf $BRAND/glyphs/$glyph --glyph-scale ${GLYPH_SCALE[$app]:-0.56})
   fi
 
   # The generator owns these folders; clear old PNGs so renamed files don't linger.
