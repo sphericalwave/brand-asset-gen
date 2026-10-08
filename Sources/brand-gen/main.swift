@@ -36,6 +36,8 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --launch-style   glyph|tile  launch logo is overlay + glyph only (default) or the full icon tile
   --no-launch-name         omit the app name under the launch logo
   --launch-size    <pt>    launch logo icon size in points (default: 170)
+  --no-launch-gradient     skip the LaunchGradient imageset (apps whose UILaunchScreen plist
+                           dict uses LaunchBackground + LaunchLogo, not a storyboard)
 
 examples:
   brand-gen --name MyApp --brand-color 2A0A3D --dark-color 9B5CDB --glyph-pdf icon.pdf
@@ -62,6 +64,7 @@ let shadow         = CommandLine.arguments.contains("--shadow")
 let launchTile     = arg("--launch-style") == "tile"
 let launchName     = CommandLine.arguments.contains("--no-launch-name") ? "" : appName
 let launchSize     = arg("--launch-size").flatMap(Double.init).map { CGFloat($0) } ?? 170
+let launchGradient = !CommandLine.arguments.contains("--no-launch-gradient")
 
 let outputURL  = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 let appIconDir = outputURL.appendingPathComponent("AppIcon.appiconset")
@@ -147,7 +150,9 @@ if glyphPDF != nil || sfSymbol != nil {
 
     // Launch screen image: a dedicated launch background at its own size, else the icon
     // background as a square. The launch storyboard aspect-fills it either way.
-    if let launchBackground = launchBackgroundPDF, let image = NSImage(contentsOf: launchBackground) {
+    if !launchGradient {
+        // UILaunchScreen plist apps: LaunchBackground colorset + LaunchLogo only.
+    } else if let launchBackground = launchBackgroundPDF, let image = NSImage(contentsOf: launchBackground) {
         writeText(launchGradientContentsJSON, to: gradientDir, name: "Contents.json")
         write(renderImage(width: image.size.width, height: image.size.height, drawer: imageFillDrawer(url: launchBackground)),
               to: gradientDir, name: "LaunchGradient.png")
