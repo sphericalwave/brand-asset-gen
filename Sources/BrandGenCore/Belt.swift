@@ -12,7 +12,7 @@ public struct Belt {
     public let keyline: NSColor
 
     public static let white  = Belt(name: "white",  color: hex(0xF4F1EA), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0x0E2F66))
-    public static let blue   = Belt(name: "blue",   color: hex(0x1F4FBF), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
+    public static let blue   = Belt(name: "blue",   color: hex(0x1A3FA8), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
     public static let purple = Belt(name: "purple", color: hex(0x6B2D8F), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
     public static let brown  = Belt(name: "brown",  color: hex(0x6B3E1F), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
     public static let black  = Belt(name: "black",  color: hex(0x161616), bar: hex(0xC8102E), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
@@ -77,21 +77,6 @@ public func beltGlyphDrawer(url: URL, belt: Belt, stripes: Int = 0, scale: CGFlo
             }
         }
         ctx.draw(beltImage, in: drawRect)
-    }
-}
-
-/// Radial gradient in the belt colour (lighter centre → darker edge), echoing Brand/family/background.pdf.
-public func beltBackgroundDrawer(_ belt: Belt) -> GlyphDrawer {
-    return { rect, ctx in
-        let c = belt.color.usingColorSpace(.sRGB)!
-        let inner = c.blended(withFraction: 0.18, of: .white)!, outer = c.blended(withFraction: 0.35, of: .black)!
-        let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [inner.cgColor, outer.cgColor] as CFArray, locations: [0, 1])!
-        ctx.saveGState()
-        ctx.clip(to: rect)
-        ctx.drawRadialGradient(g, startCenter: CGPoint(x: rect.midX, y: rect.midY), startRadius: 0,
-                               endCenter: CGPoint(x: rect.midX, y: rect.midY), endRadius: rect.width * 0.75,
-                               options: [.drawsAfterEndLocation])
-        ctx.restoreGState()
     }
 }
 

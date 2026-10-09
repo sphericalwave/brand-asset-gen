@@ -22,6 +22,17 @@ public let appIconContentsJSON = """
 }
 """
 
+/// `AppIcon-<name>.appiconset/Contents.json` — iOS alternate icon (single universal 1024).
+/// Alternate icons are iOS-only; list them in ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES.
+public let alternateAppIconContentsJSON = """
+{
+  "images": [
+    { "filename": "icon-1024.png", "idiom": "universal", "platform": "ios", "size": "1024x1024" }
+  ],
+  "info": { "author": "xcode", "version": 1 }
+}
+"""
+
 /// `LaunchLogo.imageset/Contents.json`
 public let launchLogoContentsJSON = """
 {

@@ -36,10 +36,12 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --launch-style   glyph|tile  launch logo is overlay + glyph only (default) or the full icon tile
   --no-launch-name         omit the app name under the launch logo
   --launch-size    <pt>    launch logo icon size in points (default: 170)
-  --belt <white|blue|purple|brown|black|red>  colour a belt glyph PDF as that rank (largest
-                           enclosed hole in the glyph becomes the bar); needs --glyph-pdf
-  --launch-stripes <0-4>   stripes on the launch logo's bar (icon never shows stripes)
-  --belt-background        belt-coloured icon background with a white glyph instead
+
+  belt ranks (need --glyph-pdf; the glyph's largest enclosed hole becomes the rank bar):
+  --belt <white|blue|purple|brown|black|red>  colour the icon + launch logo glyph as that rank
+  --launch-belt <rank>     colour only the launch logo (overrides --belt for the launch logo)
+  --launch-stripes <0-4>   stripes on the launch logo's bar (icons never show stripes)
+  --belt-alternate-icons   also write an iOS alternate icon set per rank, AppIcon-<rank>.appiconset
   --no-launch-gradient     skip the LaunchGradient imageset (apps whose UILaunchScreen plist
                            dict uses LaunchBackground + LaunchLogo, not a storyboard)
 
@@ -73,8 +75,16 @@ let belt           = arg("--belt").map { name -> Belt in
     guard let b = Belt.named(name) else { print("unknown belt: \(name)"); exit(1) }
     return b
 }
+let launchBelt     = arg("--launch-belt").map { name -> Belt in
+    guard let b = Belt.named(name) else { print("unknown belt: \(name)"); exit(1) }
+    return b
+} ?? belt
 let launchStripes  = arg("--launch-stripes").flatMap(Int.init) ?? 0
-let beltBackground = CommandLine.arguments.contains("--belt-background")
+let beltIcons      = CommandLine.arguments.contains("--belt-alternate-icons")
+if (launchBelt != nil || beltIcons) && (glyphPDF == nil || sfSymbol != nil) {
+    print("belt options need a --glyph-pdf belt glyph (and no --sf-symbol)")
+    exit(1)
+}
 
 let outputURL  = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 let appIconDir = outputURL.appendingPathComponent("AppIcon.appiconset")
@@ -118,11 +128,12 @@ if glyphPDF != nil, sfSymbol != nil {
 if glyphPDF != nil || sfSymbol != nil {
     let brandColor = hexColor(brandHex)
     let glyphColor = hexColor(glyphHex)
+    func beltDrawer(_ b: Belt, stripes: Int = 0) -> GlyphDrawer {
+        beltGlyphDrawer(url: glyphPDF!, belt: b, stripes: stripes, scale: glyphScale ?? 0.70)
+    }
     let drawer: GlyphDrawer
-    var launchGlyph: GlyphDrawer? = nil
-    if let belt, let pdf = glyphPDF, !beltBackground {
-        drawer = beltGlyphDrawer(url: pdf, belt: belt, scale: glyphScale ?? 0.70)
-        launchGlyph = beltGlyphDrawer(url: pdf, belt: belt, stripes: launchStripes, scale: glyphScale ?? 0.70)
+    if let belt {
+        drawer = beltDrawer(belt)
     } else if let symbol = sfSymbol {
         drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor, scale: glyphScale ?? 0.60)
     } else {
@@ -130,18 +141,18 @@ if glyphPDF != nil || sfSymbol != nil {
     }
 
     // Foreground = optional overlay under the glyph, optionally casting one shared shadow.
-    var foreground = drawer
-    var launchForeground = launchGlyph ?? drawer
-    if let overlay = overlayPDF {
-        let overlayDrawer = faded(pdfGlyphDrawer(url: overlay, tint: glyphColor, scale: overlayScale), opacity: overlayOpacity)
-        foreground = layered([overlayDrawer, drawer])
-        launchForeground = layered([overlayDrawer, launchForeground])
+    func foregrounded(_ glyph: @escaping GlyphDrawer) -> GlyphDrawer {
+        var result = glyph
+        if let overlay = overlayPDF {
+            let overlayDrawer = faded(pdfGlyphDrawer(url: overlay, tint: glyphColor, scale: overlayScale), opacity: overlayOpacity)
+            result = layered([overlayDrawer, glyph])
+        }
+        return shadow ? shadowed(result) : result
     }
-    if shadow { foreground = shadowed(foreground); launchForeground = shadowed(launchForeground) }
+    let foreground = foregrounded(drawer)
+    let launchForeground = launchBelt.map { foregrounded(beltDrawer($0, stripes: launchStripes)) } ?? foreground
 
-    let backgroundDrawer = beltBackground && belt != nil
-        ? beltBackgroundDrawer(belt!)
-        : backgroundPDF.map { imageFillDrawer(url: $0) }
+    let backgroundDrawer = backgroundPDF.map { imageFillDrawer(url: $0) }
     let iconDrawer = layered([backgroundDrawer, foreground].compactMap { $0 })
     // Tile launch logo: the whole icon as a rounded square, inset so its shadow isn't cropped.
     let launchDrawer: GlyphDrawer = launchTile
@@ -158,6 +169,15 @@ if glyphPDF != nil || sfSymbol != nil {
             iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer)
         }
         write(iconPNG, to: appIconDir, name: "icon-\(size).png")
+    }
+    // iOS alternate icons (UIApplication.setAlternateIconName), one per belt rank.
+    if beltIcons {
+        for b in Belt.all {
+            let dir = outputURL.appendingPathComponent("AppIcon-\(b.name).appiconset")
+            let altDrawer = layered([backgroundDrawer, foregrounded(beltDrawer(b))].compactMap { $0 })
+            writeText(alternateAppIconContentsJSON, to: dir, name: "Contents.json")
+            write(render(size: 1024, background: brandColor, glyphDrawer: altDrawer), to: dir, name: "icon-1024.png")
+        }
     }
     write(renderLaunchLogo(circleSize: launchSize, appName: launchName, glyphColor: glyphColor, glyphDrawer: launchDrawer),
           to: launchDir, name: "LaunchLogo.png")

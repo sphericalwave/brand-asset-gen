@@ -49,6 +49,13 @@ brand-gen --name MyApp --brand-color 2A0A3D --glyph-pdf Assets/icon.pdf \
 | `--sf-symbol` | | — | SF Symbol name to use as the icon glyph instead of `--glyph-pdf`. If both are supplied, `--sf-symbol` wins |
 | `--glyph-color` | | `FFFFFF` | Tint applied to the glyph |
 | `--output` | | `./Assets.xcassets` | Path to your app's `Assets.xcassets` directory |
+| `--belt` | | — | Belt rank (`white`/`blue`/`purple`/`brown`/`black`/`red`): colours a belt glyph PDF as that rank on the icon + launch logo. The glyph's largest enclosed hole becomes the rank bar |
+| `--launch-belt` | | `--belt` | Belt rank for the launch logo only (primary icon unchanged) |
+| `--launch-stripes` | | `0` | Stripes (0–4) on the launch logo's rank bar. Icons never show stripes |
+| `--belt-alternate-icons` | | — | Also writes `AppIcon-<rank>.appiconset` (iOS alternate icon, 1024 only) for every rank. List them in the target's `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` and switch with `UIApplication.setAlternateIconName("AppIcon-<rank>")` |
+
+Belt colours (sRGB): white `F4F1EA`, blue `1A3FA8`, purple `6B2D8F`, brown `6B3E1F`, black `161616`, red `C8102E`.
+Bar: black `161616` (white/blue/purple/brown), red `C8102E` (black), white `F4F1EA` (red). Stripe tape `F4F1EA`, black on the red belt's white bar.
 
 ---
 
