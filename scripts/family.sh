@@ -46,6 +46,12 @@ typeset -A GLYPH_SCALE=(
   shodan 1.0
 )
 
+# Extra generator flags per app. shodan: one iOS alternate icon per belt rank (in-app picker),
+# launch logo as a black belt with 4 stripes.
+typeset -A EXTRA_ARGS=(
+  shodan "--belt-alternate-icons --launch-belt black --launch-stripes 4"
+)
+
 swift build -c release --package-path $REPO >/dev/null
 GEN=$REPO/.build/release/brand-gen
 
@@ -70,7 +76,7 @@ for app in ${@:-${(ko)APPS}}; do
     --background-pdf $BRAND/family/background.pdf \
     --launch-background-pdf $BRAND/family/launch-background.pdf \
     --overlay-pdf $BRAND/family/ve.pdf --overlay-scale 0.94 --overlay-opacity 0.4 \
-    --shadow --no-launch-name --launch-size 300 \
+    --shadow --no-launch-name --launch-size 300 ${=EXTRA_ARGS[$app]:-} \
     --output $assets >/dev/null
 
   cp $REPO/templates/LaunchScreen.storyboard ${assets:h}/LaunchScreen.storyboard
