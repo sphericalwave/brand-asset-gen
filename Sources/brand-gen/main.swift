@@ -36,6 +36,10 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --launch-style   glyph|tile  launch logo is overlay + glyph only (default) or the full icon tile
   --no-launch-name         omit the app name under the launch logo
   --launch-size    <pt>    launch logo icon size in points (default: 170)
+  --belt <white|blue|purple|brown|black|red>  colour a belt glyph PDF as that rank (largest
+                           enclosed hole in the glyph becomes the bar); needs --glyph-pdf
+  --launch-stripes <0-4>   stripes on the launch logo's bar (icon never shows stripes)
+  --belt-background        belt-coloured icon background with a white glyph instead
   --no-launch-gradient     skip the LaunchGradient imageset (apps whose UILaunchScreen plist
                            dict uses LaunchBackground + LaunchLogo, not a storyboard)
 
@@ -65,6 +69,12 @@ let launchTile     = arg("--launch-style") == "tile"
 let launchName     = CommandLine.arguments.contains("--no-launch-name") ? "" : appName
 let launchSize     = arg("--launch-size").flatMap(Double.init).map { CGFloat($0) } ?? 170
 let launchGradient = !CommandLine.arguments.contains("--no-launch-gradient")
+let belt           = arg("--belt").map { name -> Belt in
+    guard let b = Belt.named(name) else { print("unknown belt: \(name)"); exit(1) }
+    return b
+}
+let launchStripes  = arg("--launch-stripes").flatMap(Int.init) ?? 0
+let beltBackground = CommandLine.arguments.contains("--belt-background")
 
 let outputURL  = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 let appIconDir = outputURL.appendingPathComponent("AppIcon.appiconset")
@@ -109,7 +119,11 @@ if glyphPDF != nil || sfSymbol != nil {
     let brandColor = hexColor(brandHex)
     let glyphColor = hexColor(glyphHex)
     let drawer: GlyphDrawer
-    if let symbol = sfSymbol {
+    var launchGlyph: GlyphDrawer? = nil
+    if let belt, let pdf = glyphPDF, !beltBackground {
+        drawer = beltGlyphDrawer(url: pdf, belt: belt, scale: glyphScale ?? 0.70)
+        launchGlyph = beltGlyphDrawer(url: pdf, belt: belt, stripes: launchStripes, scale: glyphScale ?? 0.70)
+    } else if let symbol = sfSymbol {
         drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor, scale: glyphScale ?? 0.60)
     } else {
         drawer = pdfGlyphDrawer(url: glyphPDF!, tint: glyphColor, scale: glyphScale ?? 0.70)
@@ -117,18 +131,22 @@ if glyphPDF != nil || sfSymbol != nil {
 
     // Foreground = optional overlay under the glyph, optionally casting one shared shadow.
     var foreground = drawer
+    var launchForeground = launchGlyph ?? drawer
     if let overlay = overlayPDF {
         let overlayDrawer = faded(pdfGlyphDrawer(url: overlay, tint: glyphColor, scale: overlayScale), opacity: overlayOpacity)
         foreground = layered([overlayDrawer, drawer])
+        launchForeground = layered([overlayDrawer, launchForeground])
     }
-    if shadow { foreground = shadowed(foreground) }
+    if shadow { foreground = shadowed(foreground); launchForeground = shadowed(launchForeground) }
 
-    let backgroundDrawer = backgroundPDF.map { imageFillDrawer(url: $0) }
+    let backgroundDrawer = beltBackground && belt != nil
+        ? beltBackgroundDrawer(belt!)
+        : backgroundPDF.map { imageFillDrawer(url: $0) }
     let iconDrawer = layered([backgroundDrawer, foreground].compactMap { $0 })
     // Tile launch logo: the whole icon as a rounded square, inset so its shadow isn't cropped.
     let launchDrawer: GlyphDrawer = launchTile
         ? { rect, ctx in shadowed(tiled(iconDrawer))(rect.insetBy(dx: rect.width * 0.06, dy: rect.width * 0.06), ctx) }
-        : foreground
+        : launchForeground
 
     for size in [16, 32, 64, 128, 256, 512, 1024] {
         let iconPNG: Data
