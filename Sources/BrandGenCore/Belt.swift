@@ -8,15 +8,15 @@ public struct Belt {
     public let color: NSColor
     public let bar: NSColor
     public let stripe: NSColor
-    /// Contrast outline drawn around the belt glyph so it separates from the family-blue background.
+    /// Contrast outline drawn around the belt glyph: black, dark grey for the black belt.
     public let keyline: NSColor
 
-    public static let white  = Belt(name: "white",  color: hex(0xF4F1EA), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0x0E2F66))
-    public static let blue   = Belt(name: "blue",   color: hex(0x1A3FA8), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
-    public static let purple = Belt(name: "purple", color: hex(0x6B2D8F), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
-    public static let brown  = Belt(name: "brown",  color: hex(0x6B3E1F), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
-    public static let black  = Belt(name: "black",  color: hex(0x161616), bar: hex(0xC8102E), stripe: hex(0xF4F1EA), keyline: hex(0xFFFFFF))
-    public static let red    = Belt(name: "red",    color: hex(0xC8102E), bar: hex(0xF4F1EA), stripe: hex(0x161616), keyline: hex(0xFFFFFF))
+    public static let white  = Belt(name: "white",  color: hex(0xF4F1EA), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0x000000))
+    public static let blue   = Belt(name: "blue",   color: hex(0x1A3FA8), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0x000000))
+    public static let purple = Belt(name: "purple", color: hex(0x6B2D8F), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0x000000))
+    public static let brown  = Belt(name: "brown",  color: hex(0x6B3E1F), bar: hex(0x161616), stripe: hex(0xF4F1EA), keyline: hex(0x000000))
+    public static let black  = Belt(name: "black",  color: hex(0x161616), bar: hex(0xC8102E), stripe: hex(0xF4F1EA), keyline: hex(0x4D4D4D))
+    public static let red    = Belt(name: "red",    color: hex(0xC8102E), bar: hex(0xF4F1EA), stripe: hex(0x161616), keyline: hex(0x000000))
 
     public static let all: [Belt] = [white, blue, purple, brown, black, red]
     public static func named(_ name: String) -> Belt? { all.first { $0.name == name.lowercased() } }
@@ -63,7 +63,7 @@ public func beltGlyphDrawer(url: URL, belt: Belt, stripes: Int = 0, scale: CGFlo
             if let bar {
                 c.setBlendMode(.sourceAtop)
                 c.setFillColor(belt.bar.cgColor)
-                c.addLines(between: bar.band(0, bar.length, height: CGFloat(h)))
+                c.addLines(between: bar.band(bar.barStart, bar.barEnd, height: CGFloat(h)))
                 c.closePath()
                 c.fillPath()
                 c.setFillColor(belt.stripe.cgColor)
@@ -95,6 +95,13 @@ struct BarHole {
     /// Tail edges across the belt, measured from `centroid` along the normal (uMin < 0 < uMax).
     let uMin: CGFloat
     let uMax: CGFloat
+    /// Belt colour between the hole's tip end and the end of the tail.
+    let tipMargin: CGFloat
+
+    /// The rank bar along the tail (0 = the hole's tip end): starts halfway into the tip margin,
+    /// so it sits nearer the end of the tail, and runs a little past the hole toward the knot.
+    var barStart: CGFloat { -tipMargin * 0.5 }
+    var barEnd: CGFloat { length * 1.2 }
 
     /// Quad across the tail's full width between `t0` and `t1` along the bar (0 = tip end),
     /// in CG (y-up) coordinates. Overshoots the edges by 1px; callers clip to the belt.
@@ -109,12 +116,15 @@ struct BarHole {
         return [point(t0, uMin - 1), point(t1, uMin - 1), point(t1, uMax + 1), point(t0, uMax + 1)]
     }
 
-    /// Stripe quads in CG (y-up) coordinates, laid from the tip end of the bar.
+    /// Stripe quads in CG (y-up) coordinates. Four evenly spaced slots with equal margins at both
+    /// ends of the bar; fewer stripes fill the slots from the tip end.
     func stripeQuads(count: Int, height: CGFloat) -> [[CGPoint]] {
         guard count > 0 else { return [] }
-        let stripeW = length * 0.11, gap = length * 0.075, start = length * 0.13
+        let span = barEnd - barStart
+        let stripeW = span * 0.09, gap = span * 0.11
+        let margin = (span - 4 * stripeW - 3 * gap) / 2
         return (0..<min(count, 4)).map { i in
-            let t0 = start + CGFloat(i) * (stripeW + gap)
+            let t0 = barStart + margin + CGFloat(i) * (stripeW + gap)
             return band(t0, t0 + stripeW, height: height)
         }
     }
@@ -173,10 +183,8 @@ func largestHole(in rep: NSBitmapImageRep) -> BarHole? {
     }
     let centre = CGPoint(x: mx + axis.dx * (lo + hi) / 2, y: my + axis.dy * (lo + hi) / 2)
 
-    // Tail edges: walk across the belt from the bar centre, through the hole and its frame,
-    // until the glyph ends.
-    func edge(_ sign: CGFloat) -> CGFloat {
-        let n = CGVector(dx: -axis.dy * sign, dy: axis.dx * sign)
+    // Distance from the bar centre, through the hole and its frame, to where the glyph ends.
+    func walk(_ n: CGVector) -> CGFloat {
         var d: CGFloat = 0, inFrame = false
         while d < CGFloat(max(w, h)) {
             let x = Int((centre.x + n.dx * d).rounded()), y = Int((centre.y + n.dy * d).rounded())
@@ -185,7 +193,7 @@ func largestHole(in rep: NSBitmapImageRep) -> BarHole? {
             if alpha >= 128 { inFrame = true } else if inFrame { break }
             d += 0.5
         }
-        return d * sign
+        return d
     }
 
     // Mask, dilated 1px so the bar runs under the glyph's anti-aliased edge.
@@ -198,7 +206,9 @@ func largestHole(in rep: NSBitmapImageRep) -> BarHole? {
     let mask = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: w,
                        space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
                        provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
-    return BarHole(mask: mask, centroid: centre, axis: axis, length: hi - lo, uMin: edge(-1), uMax: edge(1))
+    return BarHole(mask: mask, centroid: centre, axis: axis, length: hi - lo,
+                   uMin: -walk(CGVector(dx: axis.dy, dy: -axis.dx)), uMax: walk(CGVector(dx: -axis.dy, dy: axis.dx)),
+                   tipMargin: walk(CGVector(dx: -axis.dx, dy: -axis.dy)) - (hi - lo) / 2)
 }
 
 /// Outline of `image` (a `radius` dilation in `color`), padded by the radius on every side.
