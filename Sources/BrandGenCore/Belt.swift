@@ -47,7 +47,8 @@ public func beltGlyphDrawer(url: URL, belt: Belt, stripes: Int = 0, scale: CGFlo
         withContext(raw) { _ in image.draw(in: size) }
         let bar = largestHole(in: raw)
 
-        // Belt = bar fill + stripes underneath, belt-coloured glyph on top (its AA edge blends over the bar).
+        // Belt-coloured glyph over a bar-coloured hole, then the bar band painted across the tail's
+        // full width (sourceAtop keeps it inside the belt), then stripes on the band.
         let tintedGlyph = tinted(image, size: size, color: belt.color)
         let composite = makeBitmapRep(width: w, height: h)
         withContext(composite) { c in
@@ -56,25 +57,29 @@ public func beltGlyphDrawer(url: URL, belt: Belt, stripes: Int = 0, scale: CGFlo
                 c.clip(to: size, mask: bar.mask)
                 c.setFillColor(belt.bar.cgColor)
                 c.fill(size)
+                c.restoreGState()
+            }
+            if let g = tintedGlyph { c.draw(g, in: size) }
+            if let bar {
+                c.setBlendMode(.sourceAtop)
+                c.setFillColor(belt.bar.cgColor)
+                c.addLines(between: bar.band(0, bar.length, height: CGFloat(h)))
+                c.closePath()
+                c.fillPath()
                 c.setFillColor(belt.stripe.cgColor)
                 for quad in bar.stripeQuads(count: stripes, height: CGFloat(h)) {
                     c.addLines(between: quad)
                     c.closePath()
                 }
                 c.fillPath()
-                c.restoreGState()
             }
-            if let g = tintedGlyph { c.draw(g, in: size) }
         }
         guard let beltImage = composite.cgImage else { return }
 
         let drawRect = CGRect(x: rect.midX - CGFloat(w) / 2, y: rect.midY - CGFloat(h) / 2, width: CGFloat(w), height: CGFloat(h))
-        if keyline > 0, let outline = tinted(NSImage(cgImage: beltImage, size: size.size), size: size, color: belt.keyline) {
-            let r = rect.width * keyline
-            for i in 0..<24 {
-                let a = CGFloat(i) / 24 * 2 * .pi
-                ctx.draw(outline, in: drawRect.offsetBy(dx: cos(a) * r, dy: sin(a) * r))
-            }
+        if keyline > 0, let outline = keylineImage(beltImage, size: size.size, color: belt.keyline, radius: rect.width * keyline) {
+            let m = CGFloat(outline.width - w) / 2
+            ctx.draw(outline, in: drawRect.insetBy(dx: -m, dy: -m))
         }
         ctx.draw(beltImage, in: drawRect)
     }
@@ -87,21 +92,30 @@ struct BarHole {
     let centroid: CGPoint    // pixel coords, row 0 = top
     let axis: CGVector       // unit vector along the belt, pointing from the tip toward the knot
     let length: CGFloat
-    let width: CGFloat
+    /// Tail edges across the belt, measured from `centroid` along the normal (uMin < 0 < uMax).
+    let uMin: CGFloat
+    let uMax: CGFloat
 
-    /// Stripe quads in CG (y-up) coordinates.
+    /// Quad across the tail's full width between `t0` and `t1` along the bar (0 = tip end),
+    /// in CG (y-up) coordinates. Overshoots the edges by 1px; callers clip to the belt.
+    func band(_ t0: CGFloat, _ t1: CGFloat, height: CGFloat) -> [CGPoint] {
+        let n = CGVector(dx: -axis.dy, dy: axis.dx)
+        let tip = CGPoint(x: centroid.x - axis.dx * length / 2, y: centroid.y - axis.dy * length / 2)
+        func point(_ t: CGFloat, _ u: CGFloat) -> CGPoint {
+            let x: CGFloat = tip.x + axis.dx * t + n.dx * u
+            let y: CGFloat = tip.y + axis.dy * t + n.dy * u
+            return CGPoint(x: x, y: height - y)
+        }
+        return [point(t0, uMin - 1), point(t1, uMin - 1), point(t1, uMax + 1), point(t0, uMax + 1)]
+    }
+
+    /// Stripe quads in CG (y-up) coordinates, laid from the tip end of the bar.
     func stripeQuads(count: Int, height: CGFloat) -> [[CGPoint]] {
         guard count > 0 else { return [] }
         let stripeW = length * 0.11, gap = length * 0.075, start = length * 0.13
-        let n = CGVector(dx: -axis.dy, dy: axis.dx)
-        let tip = CGPoint(x: centroid.x - axis.dx * length / 2, y: centroid.y - axis.dy * length / 2)
         return (0..<min(count, 4)).map { i in
-            let t0 = start + CGFloat(i) * (stripeW + gap), t1 = t0 + stripeW
-            let half = width   // overshoot; the bar mask clips it
-            return [(t0, -half), (t1, -half), (t1, half), (t0, half)].map { t, u in
-                let p = CGPoint(x: tip.x + axis.dx * t + n.dx * u, y: tip.y + axis.dy * t + n.dy * u)
-                return CGPoint(x: p.x, y: height - p.y)
-            }
+            let t0 = start + CGFloat(i) * (stripeW + gap)
+            return band(t0, t0 + stripeW, height: height)
         }
     }
 }
@@ -152,13 +166,27 @@ func largestHole(in rep: NSBitmapImageRep) -> BarHole? {
     // Point the axis away from the tip: the tip end is the one farther from the glyph centre.
     let toCentre = CGVector(dx: CGFloat(w) / 2 - mx, dy: CGFloat(h) / 2 - my)
     if axis.dx * toCentre.dx + axis.dy * toCentre.dy < 0 { axis = CGVector(dx: -axis.dx, dy: -axis.dy) }
-    var lo = CGFloat.greatestFiniteMagnitude, hi = -lo, wlo = lo, whi = -lo
+    var lo = CGFloat.greatestFiniteMagnitude, hi = -lo
     for i in best {
-        let dx = CGFloat(i % w) - mx, dy = CGFloat(i / w) - my
-        let t = dx * axis.dx + dy * axis.dy, u = -dx * axis.dy + dy * axis.dx
-        lo = min(lo, t); hi = max(hi, t); wlo = min(wlo, u); whi = max(whi, u)
+        let t = (CGFloat(i % w) - mx) * axis.dx + (CGFloat(i / w) - my) * axis.dy
+        lo = min(lo, t); hi = max(hi, t)
     }
     let centre = CGPoint(x: mx + axis.dx * (lo + hi) / 2, y: my + axis.dy * (lo + hi) / 2)
+
+    // Tail edges: walk across the belt from the bar centre, through the hole and its frame,
+    // until the glyph ends.
+    func edge(_ sign: CGFloat) -> CGFloat {
+        let n = CGVector(dx: -axis.dy * sign, dy: axis.dx * sign)
+        var d: CGFloat = 0, inFrame = false
+        while d < CGFloat(max(w, h)) {
+            let x = Int((centre.x + n.dx * d).rounded()), y = Int((centre.y + n.dy * d).rounded())
+            guard x >= 0, y >= 0, x < w, y < h else { break }
+            let alpha = data[y * bpr + x * spp + 3]
+            if alpha >= 128 { inFrame = true } else if inFrame { break }
+            d += 0.5
+        }
+        return d * sign
+    }
 
     // Mask, dilated 1px so the bar runs under the glyph's anti-aliased edge.
     var bytes = [UInt8](repeating: 0, count: w * h)
@@ -170,7 +198,48 @@ func largestHole(in rep: NSBitmapImageRep) -> BarHole? {
     let mask = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: w,
                        space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
                        provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
-    return BarHole(mask: mask, centroid: centre, axis: axis, length: hi - lo, width: whi - wlo)
+    return BarHole(mask: mask, centroid: centre, axis: axis, length: hi - lo, uMin: edge(-1), uMax: edge(1))
+}
+
+/// Outline of `image` (a `radius` dilation in `color`), padded by the radius on every side.
+/// Background pockets the outline encloses, e.g. where the gaps between knot pieces meet,
+/// are filled too so no background shows through the middle of the belt.
+private func keylineImage(_ image: CGImage, size: CGSize, color: NSColor, radius r: CGFloat) -> CGImage? {
+    let m = Int(ceil(r)) + 2
+    let w = Int(size.width) + 2 * m, h = Int(size.height) + 2 * m
+    let rep = makeBitmapRep(width: w, height: h)
+    let flat = tinted(NSImage(cgImage: image, size: size), size: CGRect(origin: .zero, size: size), color: color)
+    withContext(rep) { c in
+        guard let flat else { return }
+        for i in 0..<24 {
+            let a = CGFloat(i) / 24 * 2 * .pi
+            c.draw(flat, in: CGRect(x: CGFloat(m) + cos(a) * r, y: CGFloat(m) + sin(a) * r, width: size.width, height: size.height))
+        }
+    }
+    guard let data = rep.bitmapData else { return rep.cgImage }
+    let bpr = rep.bytesPerRow, spp = rep.samplesPerPixel
+    var outside = [Bool](repeating: false, count: w * h)
+    var stack: [Int] = []
+    func open(_ i: Int) -> Bool { data[(i / w) * bpr + (i % w) * spp + 3] < 128 }
+    for x in 0..<w { stack += [x, (h - 1) * w + x] }
+    for y in 0..<h { stack += [y * w, y * w + w - 1] }
+    while let i = stack.popLast() {
+        guard !outside[i], open(i) else { continue }
+        outside[i] = true
+        let x = i % w, y = i / w
+        if x > 0 { stack.append(i - 1) }
+        if x < w - 1 { stack.append(i + 1) }
+        if y > 0 { stack.append(i - w) }
+        if y < h - 1 { stack.append(i + w) }
+    }
+    let c = color.usingColorSpace(.deviceRGB)!
+    let rgb = [c.redComponent, c.greenComponent, c.blueComponent].map { UInt8(($0 * 255).rounded()) }
+    for i in 0..<(w * h) where !outside[i] {
+        let o = (i / w) * bpr + (i % w) * spp
+        guard data[o + 3] < 255 else { continue }
+        data[o] = rgb[0]; data[o + 1] = rgb[1]; data[o + 2] = rgb[2]; data[o + 3] = 255
+    }
+    return rep.cgImage
 }
 
 /// `image` recoloured to a flat `color`, keeping its alpha.

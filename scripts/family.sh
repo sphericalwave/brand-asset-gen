@@ -46,9 +46,10 @@ typeset -A GLYPH_SCALE=(
   shodan 1.0
 )
 
-# Extra generator flags per app. shodan: one iOS alternate icon per belt rank (in-app belt picker).
+# Extra generator flags per app. shodan: one iOS alternate icon per belt rank (in-app picker),
+# launch logo as a black belt with 4 stripes.
 typeset -A EXTRA_ARGS=(
-  shodan "--belt-alternate-icons"
+  shodan "--belt-alternate-icons --launch-belt black --launch-stripes 4"
 )
 
 swift build -c release --package-path $REPO >/dev/null
