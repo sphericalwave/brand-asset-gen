@@ -164,9 +164,9 @@ if glyphPDF != nil || sfSymbol != nil {
         if backgroundDrawer != nil {
             iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: iconDrawer)
         } else if let hex2 = brandHex2 {
-            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), glyphDrawer: drawer)
+            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), glyphDrawer: foreground)
         } else {
-            iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer)
+            iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: foreground)
         }
         write(iconPNG, to: appIconDir, name: "icon-\(size).png")
     }
