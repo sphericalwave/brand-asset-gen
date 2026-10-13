@@ -24,8 +24,9 @@ public func render(size: CGFloat, background: NSColor, glyphDrawer: GlyphDrawer)
 }
 
 /// Renders a square, fully-opaque AppIcon PNG with a diagonal (top-left → bottom-right)
-/// linear gradient background instead of a flat fill.
-public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSColor), glyphDrawer: GlyphDrawer) -> Data {
+/// linear gradient background instead of a flat fill. `radial` draws `top` at the center
+/// fading to `bottom` at the corners instead.
+public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSColor), radial: Bool = false, glyphDrawer: GlyphDrawer) -> Data {
     let rep = makeBitmapRep(width: Int(size), height: Int(size))
     withContext(rep) { cg in
         let full = CGRect(x: 0, y: 0, width: size, height: size)
@@ -34,7 +35,11 @@ public func render(size: CGFloat, backgroundGradient: (top: NSColor, bottom: NSC
         cg.addRect(full)
         cg.clip()
         let colors = [backgroundGradient.top.cgColor, backgroundGradient.bottom.cgColor] as CFArray
-        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]), radial {
+            let center = CGPoint(x: size / 2, y: size / 2)
+            cg.drawRadialGradient(gradient, startCenter: center, startRadius: 0,
+                                  endCenter: center, endRadius: size / 2 * 1.4142, options: [])
+        } else if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
             cg.drawLinearGradient(
                 gradient,
                 start: CGPoint(x: 0, y: size),

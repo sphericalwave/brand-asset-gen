@@ -18,6 +18,7 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --dark-color   <RRGGBB>  dark-mode accent tint (default: same as brand-color)
   --brand-color2 <RRGGBB>  second color; app icon bg becomes a top→bottom gradient
                            brand-color → brand-color2 (LaunchBackground stays flat brand-color)
+  --radial-gradient        make that gradient radial: brand-color center → brand-color2 corners
   --glyph-pdf    <path>    PDF for the icon glyph; omit to skip PNG generation
   --sf-symbol    <name>    SF Symbol name for the icon glyph instead of --glyph-pdf
   --sf-weight    <name>    SF Symbol weight: ultralight…regular…black (default: regular)
@@ -56,6 +57,7 @@ examples:
 
 let darkHex     = arg("--dark-color") ?? brandHex
 let brandHex2   = arg("--brand-color2")
+let radialGradient = CommandLine.arguments.contains("--radial-gradient")
 let glyphPDF    = arg("--glyph-pdf").map { URL(fileURLWithPath: $0, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)) }
 let sfSymbol    = arg("--sf-symbol")
 let sfWeight: NSFont.Weight = {
@@ -174,7 +176,7 @@ if glyphPDF != nil || sfSymbol != nil {
         if backgroundDrawer != nil {
             iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: iconDrawer)
         } else if let hex2 = brandHex2 {
-            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), glyphDrawer: foreground)
+            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), radial: radialGradient, glyphDrawer: foreground)
         } else {
             iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: foreground)
         }

@@ -4,7 +4,7 @@
 #   scripts/projects.sh
 #
 # Keeps the family's vector-equilibrium overlay (Brand/family/ve.pdf) and shadow so it still sits
-# with the other sphericalwave icons, but swaps the blue background for a violet gradient.
+# with the other sphericalwave icons, but swaps the blue background for a radial violet gradient.
 # projects launches from the UILaunchScreen dict in its project.yml (LaunchBackground + LaunchLogo),
 # so no storyboard, LaunchGradient or wire_launch.py here.
 set -euo pipefail
@@ -14,13 +14,16 @@ BRAND=${BRAND_DIR:-$REPO/Brand}
 APPS_ROOT=${APPS_ROOT:-$HOME/Documents/apps}
 assets=${PROJECTS_ASSETS:-$APPS_ROOT/exoCortex/Resources/Assets.xcassets}
 
+# Brand/ is gitignored, so a fresh worktree has no ve.pdf — fail rather than silently drop the overlay.
+[[ -f $BRAND/family/ve.pdf ]] || { print "missing $BRAND/family/ve.pdf (set BRAND_DIR)"; exit 1; }
+
 swift build -c release --package-path $REPO >/dev/null
 
 # The generator owns these folders; clear old PNGs so renamed files don't linger.
 rm -f $assets/AppIcon.appiconset/*.png(N) $assets/LaunchLogo.imageset/*.png(N)
 
 $REPO/.build/release/brand-gen --name projects --brand-color 9466DB --brand-color2 5A2FA0 \
-  --dark-color A98BEA --sf-symbol checkmark --sf-weight heavy \
+  --radial-gradient --dark-color A98BEA --sf-symbol checkmark --sf-weight heavy \
   --overlay-pdf $BRAND/family/ve.pdf --overlay-scale 0.94 --overlay-opacity 0.4 \
   --shadow --no-launch-name --launch-size 300 --no-launch-gradient \
   --output $assets >/dev/null
