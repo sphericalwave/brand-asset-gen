@@ -12,7 +12,7 @@ set -euo pipefail
 REPO=${0:A:h:h}
 BRAND=${BRAND_DIR:-$REPO/Brand}
 APPS_ROOT=${APPS_ROOT:-$HOME/Documents/apps}
-assets=${PROJECTS_ASSETS:-$APPS_ROOT/projects/Resources/Assets.xcassets}
+assets=${PROJECTS_ASSETS:-$APPS_ROOT/exoCortex/Resources/Assets.xcassets}
 
 swift build -c release --package-path $REPO >/dev/null
 
