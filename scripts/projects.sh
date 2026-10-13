@@ -20,7 +20,7 @@ swift build -c release --package-path $REPO >/dev/null
 rm -f $assets/AppIcon.appiconset/*.png(N) $assets/LaunchLogo.imageset/*.png(N)
 
 $REPO/.build/release/brand-gen --name projects --brand-color 9466DB --brand-color2 5A2FA0 \
-  --dark-color A98BEA --sf-symbol checkmark.circle.fill \
+  --dark-color A98BEA --sf-symbol checkmark --sf-weight heavy \
   --overlay-pdf $BRAND/family/ve.pdf --overlay-scale 0.94 --overlay-opacity 0.4 \
   --shadow --no-launch-name --launch-size 300 --no-launch-gradient \
   --output $assets >/dev/null
