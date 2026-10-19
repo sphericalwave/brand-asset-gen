@@ -18,8 +18,10 @@ usage: brand-gen --name <AppName> --brand-color <RRGGBB> [options]
   --dark-color   <RRGGBB>  dark-mode accent tint (default: same as brand-color)
   --brand-color2 <RRGGBB>  second color; app icon bg becomes a top→bottom gradient
                            brand-color → brand-color2 (LaunchBackground stays flat brand-color)
+  --radial-gradient        make that gradient radial: brand-color center → brand-color2 corners
   --glyph-pdf    <path>    PDF for the icon glyph; omit to skip PNG generation
   --sf-symbol    <name>    SF Symbol name for the icon glyph instead of --glyph-pdf
+  --sf-weight    <name>    SF Symbol weight: ultralight…regular…black (default: regular)
   --glyph-color  <RRGGBB>  tint applied to the glyph (default: FFFFFF)
   --output       <path>    output Assets.xcassets dir (default: ./Assets.xcassets)
 
@@ -55,8 +57,18 @@ examples:
 
 let darkHex     = arg("--dark-color") ?? brandHex
 let brandHex2   = arg("--brand-color2")
+let radialGradient = CommandLine.arguments.contains("--radial-gradient")
 let glyphPDF    = arg("--glyph-pdf").map { URL(fileURLWithPath: $0, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)) }
 let sfSymbol    = arg("--sf-symbol")
+let sfWeight: NSFont.Weight = {
+    let weights: [String: NSFont.Weight] = [
+        "ultralight": .ultraLight, "thin": .thin, "light": .light, "regular": .regular,
+        "medium": .medium, "semibold": .semibold, "bold": .bold, "heavy": .heavy, "black": .black,
+    ]
+    guard let name = arg("--sf-weight") else { return .regular }
+    guard let w = weights[name] else { print("unknown sf weight: \(name)"); exit(1) }
+    return w
+}()
 let glyphHex    = arg("--glyph-color") ?? "FFFFFF"
 let outputPath  = arg("--output") ?? "./Assets.xcassets"
 let cwdURL         = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -135,7 +147,7 @@ if glyphPDF != nil || sfSymbol != nil {
     if let belt {
         drawer = beltDrawer(belt)
     } else if let symbol = sfSymbol {
-        drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor, scale: glyphScale ?? 0.60)
+        drawer = sfSymbolGlyphDrawer(name: symbol, tint: glyphColor, weight: sfWeight, scale: glyphScale ?? 0.60)
     } else {
         drawer = pdfGlyphDrawer(url: glyphPDF!, tint: glyphColor, scale: glyphScale ?? 0.70)
     }
@@ -164,9 +176,9 @@ if glyphPDF != nil || sfSymbol != nil {
         if backgroundDrawer != nil {
             iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: iconDrawer)
         } else if let hex2 = brandHex2 {
-            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), glyphDrawer: drawer)
+            iconPNG = render(size: CGFloat(size), backgroundGradient: (top: brandColor, bottom: hexColor(hex2)), radial: radialGradient, glyphDrawer: foreground)
         } else {
-            iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: drawer)
+            iconPNG = render(size: CGFloat(size), background: brandColor, glyphDrawer: foreground)
         }
         write(iconPNG, to: appIconDir, name: "icon-\(size).png")
     }
