@@ -24,7 +24,7 @@ typeset -A APPS=(
   breathe      "fitness/breathe/breathe/Assets.xcassets|sf:lungs.fill|fitness/breathe/breathe.xcodeproj"
   clubs        "fitness/clubs/clubs/Assets.xcassets|clubs.pdf|fitness/clubs/clubs.xcodeproj"
   flow         "fitness/softwork/flow/Assets.xcassets|sf:bolt.heart.fill|fitness/softwork/flow.xcodeproj"
-  fuel         "fitness/fitwrench/fitWrench/Assets/Assets.xcassets|sf:bolt.fill|fitness/fitwrench/fuel.xcodeproj"
+  fuel         "fitness/bioalchemist/fitWrench/Assets/Assets.xcassets|sf:bolt.fill|fitness/bioalchemist/fuel.xcodeproj"
   groundWerk   "fitness/groundwork/Groundwerk/Assets.xcassets|sf:figure.kickboxing|fitness/groundwork/Groundwerk.xcodeproj"
   kettlebell   "fitness/kettlebell/kettlebell/Assets.xcassets|kettlebell.pdf|fitness/kettlebell/kettlebell.xcodeproj"
   kundalini    "fitness/kundalini/kundalini/Assets.xcassets|kundalini.png|fitness/kundalini/kundalini.xcodeproj"
@@ -36,7 +36,7 @@ typeset -A APPS=(
   sleep        "fitness/sleep/sleep/Assets.xcassets|sf:bed.double.fill|fitness/sleep/sleep.xcodeproj"
   splits       "fitness/splits/splits/Assets.xcassets|sf:figure.flexibility|fitness/splits/splits.xcodeproj"
   suit         "fitness/suit/suit/Assets.xcassets|sf:figure|fitness/suit/suit.xcodeproj"
-  torque       "fitness/torque/torque/Assets.xcassets|sf:figure.strengthtraining.traditional|fitness/torque/torque.xcodeproj"
+  torque       "fitness/biomechanic/torque/Assets.xcassets|sf:figure.strengthtraining.traditional|fitness/biomechanic/torque.xcodeproj"
   wealth       "wealth/wealth/Assets.xcassets|sf:dollarsign|wealth/wealth.xcodeproj"
 )
 
